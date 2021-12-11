@@ -1,7 +1,10 @@
-import multiprocessing
 import cv2
 import numpy as np
 from multiprocessing import Process, Queue
+import open3d as o3d
+import matplotlib.pyplot as plt
+from matplotlib.pylab import *
+from mpl_toolkits.mplot3d import Axes3D
 
 
 class Slam:
@@ -28,8 +31,9 @@ class Slam:
 
     def camera(self):
         while self.vid1.isOpened() and self.vid2.isOpened():
-            self.F, self.mask, self.E, self.pts1, self.pts2= self.fundamentalMatrix()
-            self.poseEstimation()
+            self.F, self.mask, self.E, self.pts1, self.pts2 = self.fundamentalMatrix()
+            newCoordinates = self.poseEstimation()
+            self.PnP(newCoordinates)
 
             ret1, frame1 = self.vid1.read()
             ret2, frame2 = self.vid2.read()
@@ -53,18 +57,18 @@ class Slam:
             self.cam1.append(frame1)
             self.cam2.append(frame2)
 
-            # if cv2.waitKey(1) & 0xFF == ord('q'):
-            #     break
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
 
         cv2.destroyAllWindows()
 
     def fundamentalMatrix(self):
         self.pts1 = []
         self.pts2 = []
-        self.img1 = cv2.cvtColor(self.frame1, cv2.IMREAD_GRAYSCALE )
-        self.img2 = cv2.cvtColor(self.frame2, cv2.IMREAD_GRAYSCALE )
+        self.img1 = cv2.cvtColor(self.frame1, cv2.IMREAD_GRAYSCALE)
+        self.img2 = cv2.cvtColor(self.frame2, cv2.IMREAD_GRAYSCALE)
 
-        orb = cv2.ORB_create(nfeatures = 1000000, scoreType = cv2.ORB_FAST_SCORE)
+        orb = cv2.ORB_create(nfeatures=1000000, scoreType=cv2.ORB_FAST_SCORE)
 
         kp1, des1 = orb.detectAndCompute(self.img1, None)
         kp2, des2 = orb.detectAndCompute(self.img2, None)
@@ -97,10 +101,11 @@ class Slam:
         self.pts1 = np.float32(self.pts1)
         self.pts2 = np.float32(self.pts2)
 
-        #E is Essential matrix, F is Fundamental matrix
+        # E is Essential matrix, F is Fundamental matrix
         # Use 8 point algorithm to find fundamental matrix
         self.F, mask = cv2.findFundamentalMat(self.pts1, self.pts2, method=cv2.FM_8POINT, confidence=0.999)
-        self.E, mask = cv2.findEssentialMat(self.pts1, self.pts2, self.cameraMatrix, method=cv2.LMEDS, prob=0.999, threshold=3.0)
+        self.E, mask = cv2.findEssentialMat(self.pts1, self.pts2, self.cameraMatrix, method=cv2.LMEDS, prob=0.999,
+                                            threshold=3.0)
 
         # print("This is the Fundamental Matrix")
         # print(self.F)
@@ -119,21 +124,16 @@ class Slam:
         self.Fundamental = np.matrix(self.F)
         self.mask = mask
 
-        print(self.pts1.shape)
-        print(self.pts2.shape)
-
         return self.F, self.mask, self.E, self.pts1, self.pts2
 
     def poseEstimation(self):
         # SVD Decompostion to find U, S, and V
         # V can be transposed, watch out
-        #Remove outlier points later.
+        # Remove outlier points later.
         row_width = 4
 
-        #retval, R, t, mask = cv2.recoverPose(self.E, self.pts1, self.pts2, self.cameraMatrix)
-        
         retval, R, t, mask = cv2.recoverPose(self.E, self.pts1, self.pts2, self.cameraMatrix)
-        extrinsic = np.vstack((np.hstack((R, t.reshape(-1, 1))), [0, 0, 0 ,1]))
+        extrinsic = np.vstack((np.hstack((R, t.reshape(-1, 1))), [0, 0, 0, 1]))
 
         cameraMatrix = np.hstack([self.cameraMatrix, np.full((3, 1), 0.0)])
 
@@ -142,36 +142,50 @@ class Slam:
 
         projectionMatrix = np.dot(intrinsic, extrinsic)
 
-        print(projectionMatrix)
-        
-        Z = np.delete(projectionMatrix, (-1), axis = 0)
+        Z = np.delete(projectionMatrix, (-1), axis=0)
 
         self.pts1 = np.transpose(self.pts1)
         self.pts2 = np.transpose(self.pts2)
 
-        triangulate = cv2.triangulatePoints(Z, np.delete(intrinsic, (-1), axis = 0), self.pts1, self.pts2)
+        triangulate = cv2.triangulatePoints(Z, np.delete(intrinsic, (-1), axis=0), self.pts1, self.pts2)
 
         last_column = triangulate[3]
 
         coordinates1 = np.divide(triangulate, last_column)
-        newCoordinates = np.delete(coordinates1, (3), axis = 0)
+        newCoordinates = np.delete(coordinates1, 3, axis=0)
 
-        
-        return R, t, triangulate, newCoordinates
+        return newCoordinates
 
-    # def PnP(self, newCoordinates):
-    #     D = self.pts1
-    #     N = self.pts1.shape[0]
+    def PnP(self, newCoordinates):
+        distCoeffs = np.zeros((5, 1))
 
-    #     imagePoints1 = np.ascontiguousarray(D[:, :2]).reshape((N, 1, 2))
-    #     #imagePoints2 = np.ascontiguousarray(D[:, :2]).reshape((N, 1, 2))
-    #     retval, orvec, otvec = cv2.solvePnP(newCoordinates, imagePoints1, self.cameraMatrix, None, None, False, cv2.SOLVEPNP_ITERATIVE)
-    #     print(retval)
+        pts1 = np.array(self.pts1)
+
+        imagePoints1 = pts1.transpose()[:,None,:]
+        print(newCoordinates)
+        newCoordinates = newCoordinates.transpose()[:,None,:]
+
+        retval, rvec, tvec = cv2.solvePnP(newCoordinates, imagePoints1, self.cameraMatrix, distCoeffs)
+        #print(retval)
+        #print(rvec)
+        #print(tvec)
+
+    def pointCloud(self, newCoordinates, pcd, visualizer):
+        if newCoordinates != 0:
+            pcd.clear()
+            pcd.points = o3d.utility.Vector3dVector(newCoordinates)
+            visualizer.remove_geometry(pcd)
+            visualizer.add_geometry(pcd)
+            visualizer.poll_events()
+            visualizer.update_renderer()
+            time.sleep(.2)
 
     def main(self):
         self.camera()
         self.fundamentalMatrix()
-        R, t, triangulate, newCoordinates = self.poseEstimation()
-        #self.PnP(newCoordinates)
+        R, t, newCoordinates = self.poseEstimation()
+        self.PnP(newCoordinates)
+
+
 od = Slam()
 od.main()
