@@ -1,11 +1,11 @@
 import cv2
 import numpy as np
 from multiprocessing import Process, Queue
-import open3d as o3d
+import pangolin
 import matplotlib.pyplot as plt
 from matplotlib.pylab import *
 from mpl_toolkits.mplot3d import Axes3D
-
+import asyncio
 
 class Slam:
     def __init__(self):
@@ -170,16 +170,6 @@ class Slam:
         #print(rvec)
         #print(tvec)
 
-    def pointCloud(self, newCoordinates, pcd, visualizer):
-        if newCoordinates != 0:
-            pcd.clear()
-            pcd.points = o3d.utility.Vector3dVector(newCoordinates)
-            visualizer.remove_geometry(pcd)
-            visualizer.add_geometry(pcd)
-            visualizer.poll_events()
-            visualizer.update_renderer()
-            time.sleep(.2)
-
     def main(self):
         self.camera()
         self.fundamentalMatrix()
@@ -189,3 +179,4 @@ class Slam:
 
 od = Slam()
 od.main()
+
