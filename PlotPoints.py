@@ -1,48 +1,54 @@
 import OpenGL.GL as gl
 import pangolin
+
 import numpy as np
-from multiprocessing import Process, Queue
-from Test import Slam
 
-def main():
-    newSlamInstance = Slam()
-    r,t,tri,newCoords = newSlamInstance.poseEstimation() 
+class display3D():
 
-    pangolin.CreateWindowAndBind('Main', 640, 480)
-    gl.glEnable(gl.GL_DEPTH_TEST)
+    def __init__(self):
+        #self.Coordinates = newCoordinates
+        #pass in newCoordinates from other class
+        pass
 
-    # Define Projection and initial ModelView matrix
-    scam = pangolin.OpenGlRenderState(
-        pangolin.ProjectionMatrix(640, 480, 420, 420, 320, 240, 0.2, 200),
-        pangolin.ModelViewLookAt(0, -10, -8,
+    def viewer(self):
+        pangolin.CreateWindowAndBind('Main', 640, 480)
+        gl.glEnable(gl.GL_DEPTH_TEST)
+
+        # Define Projection and initial ModelView matrix
+        self.scam = pangolin.OpenGlRenderState(
+            pangolin.ProjectionMatrix(640, 480, 420, 420, 640//2, 480//2, 0.2, 10000),
+            pangolin.ModelViewLookAt(0, -10, -8,
                                 0, 0, 0,
-                               0, -1, 0))
-    handler = pangolin.Handler3D(scam)
+                                0, -1, 0))
+        handler = pangolin.Handler3D(self.scam)
 
-    # Create Interactive View in window
-    dcam = pangolin.CreateDisplay()
-    dcam.SetHandler(handler)
-
-    trajectory = [[0, -5, 6]]
-    for i in range(300):
-        trajectory.append(trajectory[-1] + np.random.random(3)-0.5)
-    trajectory = np.array(trajectory)
-
-    while not pangolin.ShouldQuit():
-        gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
-        gl.glClearColor(0.0, 0.0, 0.0, 1.0)
-        dcam.Activate(scam)
+        # Create Interactive View in window
+        self.dcam = pangolin.CreateDisplay()
+        self.dcam.SetBounds(0.0, 1.0, 0.0, 1.0, 640.0/480.0)
+        self.dcam.SetHandler(handler)
+        self.dcam.Activate()
         
-        gl.glColor3f(0.0, 1.0, 0.0)
-        gl.glPointSize(5)
-        points = newSlamInstance.newCoordinate
+    def refresh(self):
+        while not pangolin.ShouldQuit():
+            gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
+            gl.glClearColor(0.0, 0.0, 0.0, 1.0)            
+            self.dcam.Activate(self.scam)
+                        
+            # Draw camera
+            gl.glColor3f(0.0, 1.0, 0.0)
+            #pangolin.DrawCameras(pose)
+            #add in pose value in main
 
-        pangolin.DrawPoints(points)
 
-    pangolin.FinishFrame()
+            gl.glPointSize(5)
+            gl.glColor3f(1.0, 0.0, 0.0)
+            #pangolin.DrawPoints(newCoordinates)
+            
+        pangolin.FinishFrame()
 
+    def main(self):
+        self.viewer()
+        self.refresh()
 
-
-if __name__ == '__main__':
-    main()
-
+od = display3D()
+od.main()
