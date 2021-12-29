@@ -1,16 +1,10 @@
 import cv2
 import numpy as np
-from multiprocessing import Process, Queue
-import pangolin
-import matplotlib.pyplot as plt
-from matplotlib.pylab import *
-from mpl_toolkits.mplot3d import Axes3D
-import asyncio
 
 class Slam:
     def __init__(self):
-        self.vid1 = cv2.VideoCapture(2)
-        self.vid2 = cv2.VideoCapture(4)
+        self.vid1 = cv2.VideoCapture(0)
+        self.vid2 = cv2.VideoCapture(2)
         self.frame1 = self.vid1.read()[1]
         self.frame2 = self.vid2.read()[1]
         self.list_kp1 = []
@@ -154,6 +148,8 @@ class Slam:
         coordinates1 = np.divide(triangulate, last_column)
         newCoordinates = np.delete(coordinates1, 3, axis=0)
 
+        print(newCoordinates)
+
         return newCoordinates
 
     def PnP(self, newCoordinates):
@@ -162,21 +158,15 @@ class Slam:
         pts1 = np.array(self.pts1)
 
         imagePoints1 = pts1.transpose()[:,None,:]
-        print(newCoordinates)
         newCoordinates = newCoordinates.transpose()[:,None,:]
 
         retval, rvec, tvec = cv2.solvePnP(newCoordinates, imagePoints1, self.cameraMatrix, distCoeffs)
-        #print(retval)
-        #print(rvec)
-        #print(tvec)
 
     def main(self):
         self.camera()
         self.fundamentalMatrix()
-        R, t, newCoordinates = self.poseEstimation()
+        newCoordinates = self.poseEstimation()
         self.PnP(newCoordinates)
-
 
 od = Slam()
 od.main()
-
