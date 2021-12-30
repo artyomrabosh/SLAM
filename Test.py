@@ -1,6 +1,18 @@
 import cv2
 import numpy as np
 
+class Holder:
+  def __init__(self, value):
+    self._data = value
+  @property
+  def data(self):
+    return self._data
+  @data.setter
+  def data(self, value):
+    self._data = value
+
+data = Holder(None)
+
 class Slam:
     def __init__(self):
         self.vid1 = cv2.VideoCapture(0)
@@ -22,103 +34,102 @@ class Slam:
         self.E = None
         self.frameCount = 0
         self.mask = None
+        self.fundamentalMatrix()
 
     def camera(self):
-        while self.vid1.isOpened() and self.vid2.isOpened():
-            self.F, self.mask, self.E, self.pts1, self.pts2 = self.fundamentalMatrix()
-            newCoordinates = self.poseEstimation()
-            self.PnP(newCoordinates)
+        self.F, self.mask, self.E, self.pts1, self.pts2 = self.fundamentalMatrix()
+        newCoordinates = data.data = self.poseEstimation()
+        self.PnP(newCoordinates)
 
-            ret1, frame1 = self.vid1.read()
-            ret2, frame2 = self.vid2.read()
+        ret1, frame1 = self.vid1.read()
+        ret2, frame2 = self.vid2.read()
 
-            if ret1:
-                cv2.imshow('Cam 1', frame1)
-                self.frameCount += 30
-                self.vid1.set(1, self.frameCount)
-            else:
-                self.vid1.release()
-                break
+        if ret1:
+            cv2.imshow('Cam 1', frame1)
+            self.frameCount += 30
+            self.vid1.set(1, self.frameCount)
+        else:
+            self.vid1.release()
+            return
+        if ret2:
+            cv2.imshow('Cam 2', frame2)
+            self.frameCount += 30
+            self.vid2.set(1, self.frameCount)
+        else:
+            self.vid2.release()
+            return
 
-            if ret2:
-                cv2.imshow('Cam 2', frame2)
-                self.frameCount += 30
-                self.vid2.set(1, self.frameCount)
-            else:
-                self.vid2.release()
-                break
-
-            self.cam1.append(frame1)
-            self.cam2.append(frame2)
-
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
-
-        cv2.destroyAllWindows()
+        self.cam1.append(frame1)
+        self.cam2.append(frame2)
 
     def fundamentalMatrix(self):
-        self.pts1 = []
-        self.pts2 = []
-        self.img1 = cv2.cvtColor(self.frame1, cv2.IMREAD_GRAYSCALE)
-        self.img2 = cv2.cvtColor(self.frame2, cv2.IMREAD_GRAYSCALE)
+        try:
+            self.pts1 = []
+            self.pts2 = []
+            self.img1 = cv2.cvtColor(self.frame1, cv2.IMREAD_GRAYSCALE)
+            self.img2 = cv2.cvtColor(self.frame2, cv2.IMREAD_GRAYSCALE)
 
-        orb = cv2.ORB_create(nfeatures=1000000, scoreType=cv2.ORB_FAST_SCORE)
+            orb = cv2.ORB_create(nfeatures=1000000, scoreType=cv2.ORB_FAST_SCORE)
 
-        kp1, des1 = orb.detectAndCompute(self.img1, None)
-        kp2, des2 = orb.detectAndCompute(self.img2, None)
+            kp1, des1 = orb.detectAndCompute(self.img1, None)
+            kp2, des2 = orb.detectAndCompute(self.img2, None)
 
-        bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+            bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
 
-        matches = bf.match(des1, des2)
-        matches = sorted(matches, key=lambda x: x.distance)
+            matches = bf.match(des1, des2)
+            matches = sorted(matches, key=lambda x: x.distance)
 
-        for mat in matches:
-            # Get the matching key points for each of the images
-            img1_idx = mat.queryIdx
-            img2_idx = mat.trainIdx
+            for mat in matches:
+                # Get the matching key points for each of the images
+                img1_idx = mat.queryIdx
+                img2_idx = mat.trainIdx
 
-            # x - columns
-            # y - rows
-            # Get the coordinates
-            (x1, y1) = kp1[img1_idx].pt
-            (x2, y2) = kp2[img2_idx].pt
+                # x - columns
+                # y - rows
+                # Get the coordinates
+                (x1, y1) = kp1[img1_idx].pt
+                (x2, y2) = kp2[img2_idx].pt
 
-            # Append to each list
-            self.list_kp1.append((x1, y1))
-            self.list_kp2.append((x2, y2))
+                # Append to each list
+                self.list_kp1.append((x1, y1))
+                self.list_kp2.append((x2, y2))
 
-        for m in matches:
-            if m.distance < 30:
-                self.pts2.append(kp2[m.trainIdx].pt)
-                self.pts1.append(kp1[m.queryIdx].pt)
+            for m in matches:
+                if m.distance < 30:
+                    self.pts2.append(kp2[m.trainIdx].pt)
+                    self.pts1.append(kp1[m.queryIdx].pt)
 
-        self.pts1 = np.float32(self.pts1)
-        self.pts2 = np.float32(self.pts2)
+            self.pts1 = np.float32(self.pts1)
+            self.pts2 = np.float32(self.pts2)
 
-        # E is Essential matrix, F is Fundamental matrix
-        # Use 8 point algorithm to find fundamental matrix
-        self.F, mask = cv2.findFundamentalMat(self.pts1, self.pts2, method=cv2.FM_8POINT, confidence=0.999)
-        self.E, mask = cv2.findEssentialMat(self.pts1, self.pts2, self.cameraMatrix, method=cv2.LMEDS, prob=0.999,
-                                            threshold=3.0)
+            # E is Essential matrix, F is Fundamental matrix
+            # Use 8 point algorithm to find fundamental matrix
+            self.F, mask = cv2.findFundamentalMat(self.pts1, self.pts2, method=cv2.FM_8POINT, confidence=0.999)
+            self.E, mask = cv2.findEssentialMat(self.pts1, self.pts2, self.cameraMatrix, method=cv2.LMEDS, prob=0.999,
+                                                threshold=3.0)
 
-        # print("This is the Fundamental Matrix")
-        # print(self.F)
-        # print("This is the Essential Matrix")
-        # print(self.E)
+            # print("This is the Fundamental Matrix")
+            # print(self.F)
+            # print("This is the Essential Matrix")
+            # print(self.E)
 
-        self.pts1 = self.pts1[mask.ravel() == 1]
-        self.pts2 = self.pts2[mask.ravel() == 1]
+            self.pts1 = self.pts1[mask.ravel() == 1]
+            self.pts2 = self.pts2[mask.ravel() == 1]
 
-        if self.F is None or self.F.shape == (1, 1):
-            # no fundamental matrix found
-            raise Exception('No fundamental matrix found')
-        elif self.F.shape[0] > 3:
-            # more than one matrix found, just pick the first
-            self.F = self.F[0:3, 0:3]
-        self.Fundamental = np.matrix(self.F)
-        self.mask = mask
+            if self.F is None or self.F.shape == (1, 1):
+                # no fundamental matrix found
+                raise Exception('No fundamental matrix found')
+            elif self.F.shape[0] > 3:
+                # more than one matrix found, just pick the first
+                self.F = self.F[0:3, 0:3]
+            self.Fundamental = np.matrix(self.F)
+            self.mask = mask
 
-        return self.F, self.mask, self.E, self.pts1, self.pts2
+            return self.F, self.mask, self.E, self.pts1, self.pts2
+
+        except Exception as e:
+            print(e)
+            raise
 
     def poseEstimation(self):
         # SVD Decompostion to find U, S, and V
@@ -148,7 +159,8 @@ class Slam:
         coordinates1 = np.divide(triangulate, last_column)
         newCoordinates = np.delete(coordinates1, 3, axis=0)
 
-        print(newCoordinates)
+
+        data.data = np.delete(coordinates1, 3,  axis=0) 
 
         return newCoordinates
 
@@ -160,13 +172,17 @@ class Slam:
         imagePoints1 = pts1.transpose()[:,None,:]
         newCoordinates = newCoordinates.transpose()[:,None,:]
 
-        retval, rvec, tvec = cv2.solvePnP(newCoordinates, imagePoints1, self.cameraMatrix, distCoeffs)
+        data.data = newCoordinates
 
-    def main(self):
-        self.camera()
-        self.fundamentalMatrix()
+        retval, rvec, tvec = cv2.solvePnP(data.data, imagePoints1, self.cameraMatrix, distCoeffs)
+
+        return data
+        
+    def updateCoordinates(self):
         newCoordinates = self.poseEstimation()
+        data.data = newCoordinates
         self.PnP(newCoordinates)
 
-od = Slam()
-od.main()
+# od = Slam()
+# od.updateCoordinates()
+
