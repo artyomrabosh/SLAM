@@ -2,9 +2,7 @@ import OpenGL.GL as gl
 import pangolin
 import numpy as np
 from Extract import data 
-import threading
 from Extract import Slam
-import time
 import cv2
 
 class display3D:
@@ -38,9 +36,13 @@ class display3D:
 
             gl.glPointSize(5)
             gl.glColor3f(1.0, 0.0, 0.0)
+
             # # access numpy array directly(without copying data), array should be contiguous.
             data.data = data.data.squeeze()
             pangolin.DrawPoints(data.data)
+
+            pangolin.DrawCamera(data.data2, 0.5, 0.75, 0.8)
+            
             pangolin.FinishFrame()
 
 
