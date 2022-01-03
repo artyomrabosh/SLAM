@@ -2,16 +2,12 @@ import cv2
 import numpy as np
 
 class Holder:
-  def __init__(self, value):
-    self._data = value
-  @property
-  def data(self):
-    return self._data
-  @data.setter
-  def data(self, value):
-    self._data = value
+  def __init__(self):
+    self.data = None
+    self.data2 = None
 
-data = Holder(None)
+data = Holder()
+data2 = Holder()
 
 class Slam:
     def __init__(self):
@@ -108,11 +104,6 @@ class Slam:
             self.E, mask = cv2.findEssentialMat(self.pts1, self.pts2, self.cameraMatrix, method=cv2.LMEDS, prob=0.999,
                                                 threshold=3.0)
 
-            # print("This is the Fundamental Matrix")
-            # print(self.F)
-            # print("This is the Essential Matrix")
-            # print(self.E)
-
             self.pts1 = self.pts1[mask.ravel() == 1]
             self.pts2 = self.pts2[mask.ravel() == 1]
 
@@ -158,6 +149,7 @@ class Slam:
 
         coordinates1 = np.divide(triangulate, last_column)
         newCoordinates = np.delete(coordinates1, 3, axis=0)
+        print(len(newCoordinates))
 
         data.data = np.delete(coordinates1, 3,  axis=0) 
 
@@ -172,8 +164,10 @@ class Slam:
         newCoordinates = newCoordinates.transpose()[:,None,:]
 
         data.data = newCoordinates
+        
 
         retval, rvec, tvec = cv2.solvePnP(data.data, imagePoints1, self.cameraMatrix, distCoeffs)
+        data.data2 = rvec
 
         return data
         
@@ -181,7 +175,3 @@ class Slam:
         newCoordinates = self.poseEstimation()
         data.data = newCoordinates
         self.PnP(newCoordinates)
-
-# od = Slam()
-# od.updateCoordinates()
-
